@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Vencimientos Próximos</title>
+  <!-- Recarga completa del HTML cada 300 segundos (5 minutos) -->
+  <meta http-equiv="refresh" content="300">
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      margin: 20px;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 1.8rem;
+      color: #005a9e;
+    }
+    /* Contenedor que permite scroll horizontal cuando la pantalla sea muy estrecha */
+    #tablaVencimientos {
+      width: 100%;
+      overflow-x: auto;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 600px; /* Asegura cierta anchura mínima */
+      background-color: #fff;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: center;
+      font-size: 0.95rem;
+      word-break: break-word;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    th {
+      background-color: #007acc;
+      color: #fff;
+      font-weight: 600;
+    }
+    /* Alinear UBICACIÓN (columna 1) y DESCRIPCIÓN (columna 3) a la izquierda */
+    td:nth-child(1),
+    td:nth-child(3) {
+      text-align: left;
+      padding-left: 12px;
+    }
+    tr:nth-child(even) td {
+      background-color: #f9f9f9;
+    }
+    tr:hover td {
+      background-color: #d9edf7;
+      cursor: default;
+    }
+    tr.total-row td {
+      background-color: #cccccc;
+      font-weight: bold;
+    }
+    /* Animaciones para parpadeo (Vencimientos) */
+    @keyframes parpadeo-rojo {
+      0%   { background-color: rgba(255, 0, 0, 0.2); }
+      50%  { background-color: transparent; }
+      100% { background-color: rgba(255, 0, 0, 0.2); }
+    }
+    .blink-red td {
+      animation: parpadeo-rojo 1s infinite;
+    }
+    @keyframes parpadeo-amarillo {
+      0%   { background-color: rgba(255, 255, 0, 0.3); }
+      50%  { background-color: transparent; }
+      100% { background-color: rgba(255, 255, 0, 0.3); }
+    }
+    .blink-yellow td {
+      animation: parpadeo-amarillo 1s infinite;
+    }
+    /* Ajustes para pantallas muy pequeñas */
+    @media (max-width: 600px) {
+      th, td {
+        padding: 8px 6px;
+        font-size: 0.85rem;
+      }
+      table {
+        min-width: unset;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Vencimientos Próximos (menos de 30 días)</h1>
+  <!-- Contenedor responsivo -->
+  <div id="tablaVencimientos"></div>
+
+  <script>
+    // URL del CSV principal
+    const CSV_URL_BASE =
+      "https://docs.google.com/spreadsheets/d/e/" +
+      "2PACX-1vQNpc-4hMLcvSv4pO4Zirf528ePaScC-l6OGPS5nU_4peDVfs3ur6ih5row8HUs6_BKkoIQhvPvDMiv" +
+      "/pub?gid=208523845&single=true&output=csv";
+
+    let datosVálidos = [];
+
+    // Cargar y procesar CSV
+    function cargarDatos() {
+      fetch(CSV_URL_BASE)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("Error al cargar el CSV principal.");
+          }
+          return response.text();
+        })
+        .then(csvText => {
+          const filas = csvText.trim().split("\n");
+          const encabezados = filas[0].split(",");
+          const datos = filas.slice(1).map(linea => {
+            const valores = linea.split(",");
+            const obj = {};
+            encabezados.forEach((key, i) => {
+              obj[key.trim()] = valores[i] ? valores[i].trim() : "";
+            });
+            return obj;
+          });
+
+          // Parsear “TOTAL $” a número y “FECHA VENCIMIENTO” a Date
+          datosVálidos = datos.map(r => {
+            r["TOTAL $"] = parseFloat(r["TOTAL $"].replace(/[^0-9.-]+/g, "")) || 0;
+            const fechaRaw = r["FECHA VENCIMIENTO"];
+            let fechaObj;
+            if (fechaRaw.includes("/")) {
+              const partes = fechaRaw.split("/");
+              fechaObj = new Date(
+                parseInt(partes[2], 10),
+                parseInt(partes[1], 10) - 1,
+                parseInt(partes[0], 10)
+              );
+            } else {
+              fechaObj = new Date(fechaRaw);
+            }
+            r._FECHA = fechaObj;
+            return r;
+          }).filter(r =>
+            r["BODEGA"]?.trim() &&
+            r["NIVEL"]?.trim() &&
+            r["FAMILIA"]?.trim() &&
+            !isNaN(r["TOTAL $"]) &&
+            r._FECHA instanceof Date &&
+            !isNaN(r._FECHA)
+          );
+
+          dibujarTablaVencimientos();
+        })
+        .catch(err => {
+          console.error(err);
+          document.getElementById("tablaVencimientos").innerText =
+            "No se pudieron cargar los datos de vencimientos.";
+        });
+    }
+
+    // Dibujar tabla de vencimientos próximos (< 30 días)
+    function dibujarTablaVencimientos() {
+      const hoy = new Date();
+      const itemsProx = datosVálidos.filter(r => {
+        const diffDias = (r._FECHA - hoy) / (1000 * 60 * 60 * 24);
+        return diffDias >= 0 && diffDias < 30;
+      }).sort((a, b) => (a._FECHA - hoy) - (b._FECHA - hoy));
+
+      let sumMonto = 0;
+      let html = `<table>
+                    <thead>
+                      <tr>
+                        <th>UBICACIÓN</th>
+                        <th>CÓDIGO VENTA</th>
+                        <th>DESCRIPCIÓN</th>
+                        <th>FECHA VENCIMIENTO</th>
+                        <th>DÍAS FALTANTES</th>
+                        <th>UNIDADES</th>
+                        <th>BULTOS</th>
+                        <th>MONTO</th>
+                      </tr>
+                    </thead>
+                    <tbody>`;
+
+      if (itemsProx.length === 0) {
+        html += `<tr><td colspan="8">No hay productos con vencimiento en los próximos 30 días.</td></tr>`;
+      } else {
+        itemsProx.forEach(r => {
+          const d = r._FECHA;
+          const diffDias = Math.floor((d - hoy) / (1000 * 60 * 60 * 24));
+          const ubic = `${r["BODEGA"]}-${r["NIVEL"]}-${r["PASILLO"]}-${r["RACK"]}`;
+          const montoTrunc = Math.trunc(r["TOTAL $"]);
+          const unidadesMostrar = r["UNIDADES"] ? parseInt(r["UNIDADES"], 10) : 0;
+          const nivelUpper = r["NIVEL"].toUpperCase();
+          const fuerzaCeroBultos = nivelUpper.includes("PICKEO") || nivelUpper.includes("CHICLES");
+          const bultosMostrar = fuerzaCeroBultos ? 0 : (r["BULTOS"] ? parseInt(r["BULTOS"], 10) : 0);
+          sumMonto += montoTrunc;
+
+          const dd = String(d.getDate()).padStart(2, "0");
+          const mm = String(d.getMonth() + 1).padStart(2, "0");
+          const yyyy = d.getFullYear();
+          const fechaFmt = `${dd}/${mm}/${yyyy}`;
+
+          let claseFila = "";
+          if (diffDias <= 4) {
+            claseFila = "blink-red";
+          } else if (diffDias >= 5 && diffDias <= 10) {
+            claseFila = "blink-yellow";
+          }
+
+          html += `<tr class="${claseFila}">
+                     <td>${ubic}</td>
+                     <td>${r["CODIGO VENTA"] || ""}</td>
+                     <td>${r["DESCRIPCION"] || ""}</td>
+                     <td>${fechaFmt}</td>
+                     <td>${diffDias}</td>
+                     <td>${unidadesMostrar}</td>
+                     <td>${bultosMostrar}</td>
+                     <td>${montoTrunc.toLocaleString("es-CL", { minimumFractionDigits: 0 })}</td>
+                   </tr>`;
+        });
+
+        html += `<tr class="total-row">
+                   <td colspan="7"></td>
+                   <td><strong>${sumMonto.toLocaleString("es-CL", { minimumFractionDigits: 0 })}</strong></td>
+                 </tr>`;
+      }
+
+      html += `</tbody></table>`;
+      document.getElementById("tablaVencimientos").innerHTML = html;
+    }
+
+    // Al cargar la página, ejecutar la carga inicial y luego actualizar cada 2 minutos
+    window.addEventListener("DOMContentLoaded", () => {
+      cargarDatos();
+      setInterval(cargarDatos, 120000); // 120 000 ms = 2 minutos
+    });
+  </script>
+</body>
+</html>
