@@ -46,7 +46,7 @@
       word-break: break-word;
       border-bottom: 1px solid #e0e0e0;
     }
-    /* Alinear UBICACIÓN (columna 1) y DESCRIPCIÓN (columna 3) a la izquierda */
+    /* Alinear UBICACIÓN (columna 1) y DESCRIPCION (columna 3) a la izquierda */
     td:nth-child(1),
     td:nth-child(3) {
       text-align: left;
@@ -215,7 +215,7 @@
                       <tr>
                         <th>UBICACIÓN</th>
                         <th>CÓDIGO VENTA</th>
-                        <th>DESCRIPCIÓN</th>
+                        <th>DESCRIPCION</th>
                         <th>FECHA VENCIMIENTO</th>
                         <th>DÍAS FALTANTES</th>
                         <th>UNIDADES</th>
@@ -263,8 +263,8 @@
 
           html += `<tr class="${claseFila}">
                      <td>${ubic}</td>
-                     <td>${r["CÓDIGO VENTA"] || ""}</td>
-                     <td>${r["DESCRIPCIÓN"] || ""}</td>
+                     <td>${r["CODIGO VENTA"] || ""}</td>
+                     <td>${r["DESCRIPCION"] || ""}</td>
                      <td>${fechaFmt}</td>
                      <td>${displayDias}</td>
                      <td>${unidadesMostrar}</td>
