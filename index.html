@@ -56,7 +56,7 @@
       background-color: #cccccc;
       font-weight: bold;
     }
-    /* Animaciones para parpadeo (Vencimientos) */
+    /* Animaciones para parpadeo (Vencimientos cercanos) */
     @keyframes parpadeo-rojo {
       0%   { background-color: rgba(255, 0, 0, 0.2); }
       50%  { background-color: transparent; }
@@ -73,6 +73,15 @@
     .blink-yellow td {
       animation: parpadeo-amarillo 1s infinite;
     }
+    /* Animación para parpadeo morado (Productos vencidos) */
+    @keyframes parpadeo-morado {
+      0%   { background-color: rgba(128, 0, 128, 0.3); }
+      50%  { background-color: transparent; }
+      100% { background-color: rgba(128, 0, 128, 0.3); }
+    }
+    .blink-purple td {
+      animation: parpadeo-morado 1s infinite;
+    }
     /* Ajustes para pantallas muy pequeñas */
     @media (max-width: 600px) {
       th, td {
@@ -86,7 +95,7 @@
   </style>
 </head>
 <body>
-  <h1>Vencimientos Próximos (menos de 30 días)</h1>
+  <h1>Vencimientos Próximos (menos de 30 días o vencidos)</h1>
   <!-- Contenedor responsivo -->
   <div id="tablaVencimientos">
     <div id="spinner">Cargando datos…</div>
@@ -143,7 +152,9 @@
               return obj;
             })
             .map(r => {
+              // Convertir “TOTAL $” a número
               r["TOTAL $"] = parseFloat(r["TOTAL $"].replace(/[^0-9.-]+/g, "")) || 0;
+              // Parsear “FECHA VENCIMIENTO” a Date
               const fechaRaw = r["FECHA VENCIMIENTO"];
               let fechaObj;
               if (fechaRaw.includes("/")) {
@@ -186,10 +197,16 @@
       }
 
       const hoy = new Date();
+      // ------------------------------------------------------------
+      // CAMBIO: Mostrar también los vencidos (diffDias < 0),
+      //         y continuar mostrando los que vencen en < 30 días.
+      // Si solo quisieras incluir los vencidos en los últimos 30 días,
+      // podrías hacer diffDias >= -30 && diffDias < 30
+      // ------------------------------------------------------------
       const itemsProx = datosVálidos
         .filter(r => {
           const diffDias = (r._FECHA - hoy) / (1000 * 60 * 60 * 24);
-          return diffDias >= 0 && diffDias < 30;
+          return diffDias < 30; // incluye cualquier diffDias < 30 (negativos o positivos hasta 29)
         })
         .sort((a, b) => a._FECHA - b._FECHA);
 
@@ -210,7 +227,7 @@
                     <tbody>`;
 
       if (itemsProx.length === 0) {
-        html += `<tr><td colspan="8">No hay productos con vencimiento en los próximos 30 días.</td></tr>`;
+        html += `<tr><td colspan="8">No hay productos con vencimiento en los próximos 30 días ni vencidos.</td></tr>`;
       } else {
         itemsProx.forEach(r => {
           const d = r._FECHA;
@@ -230,11 +247,23 @@
           const yyyy = d.getFullYear();
           const fechaFmt = `${dd}/${mm}/${yyyy}`;
 
+          // ------------------------------------------------------------
+          // CAMBIO: Mostrar “PRODUCTO VENCIDO” si diffDias < 0,
+          //         y asignarles una clase de parpadeo morado.
+          // ------------------------------------------------------------
+          let displayDias;
           let claseFila = "";
-          if (diffDias <= 4) {
-            claseFila = "blink-red";
-          } else if (diffDias >= 5 && diffDias <= 10) {
-            claseFila = "blink-yellow";
+
+          if (diffDias < 0) {
+            displayDias = "PRODUCTO VENCIDO";
+            claseFila = "blink-purple";
+          } else {
+            displayDias = diffDias;
+            if (diffDias <= 4) {
+              claseFila = "blink-red";
+            } else if (diffDias >= 5 && diffDias <= 10) {
+              claseFila = "blink-yellow";
+            }
           }
 
           html += `<tr class="${claseFila}">
@@ -242,7 +271,7 @@
                      <td>${r["CODIGO VENTA"] || ""}</td>
                      <td>${r["DESCRIPCION"] || ""}</td>
                      <td>${fechaFmt}</td>
-                     <td>${diffDias}</td>
+                     <td>${displayDias}</td>
                      <td>${unidadesMostrar}</td>
                      <td>${bultosMostrar}</td>
                      <td>${montoTrunc.toLocaleString("es-CL", { minimumFractionDigits: 0 })}</td>
@@ -259,9 +288,9 @@
       document.getElementById("tablaVencimientos").innerHTML = html;
     }
 
-    // Al cargar la página: 
-    // • intentamos adquirir wake lock 
-    // • hacemos fetch+parse inicial 
+    // Al cargar la página:
+    // • intentamos adquirir wake lock
+    // • hacemos fetch+parse inicial
     // • redraw cada 2 min (sin volver a fetch)
     window.addEventListener("DOMContentLoaded", () => {
       solicitarWakeLock();
