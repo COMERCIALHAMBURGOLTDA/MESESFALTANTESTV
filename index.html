@@ -1,1 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Vencimientos Próximos</title>
+  <!-- Recarga completa cada 300 segundos (5 minutos) -->
+  <meta http-equiv="refresh" content="300">
+  <style>
+    /* Estilos simplificados y de tamaño adecuado para pantalla de TV */
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      font-size: 2.5rem; /* Texto grande para TV */
+    }
+    h1 {
+      text-align: center;
+      margin: 10px 0;
+      font-size: 3rem;
+    }
+    /* Contenedor con scroll horizontal si hace falta */
+    #tablaVencimientos {
+      width: 100%;
+      overflow-x: auto;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      table-layout: fixed; /* Agiliza render en TVs */
+    }
+    th, td {
+      padding: 0.8rem;
+      text-align: center;
+      border: 1px solid #444;
+      word-break: break-word;
+    }
+    th {
+      background-color: #222;
+      color: #fff;
+      font-weight: bold;
+      font-size: 2.5rem;
+    }
+    /* Ubicación y descripción alineadas a izquierda */
+    td:nth-child(1),
+    td:nth-child(3) {
+      text-align: left;
+      padding-left: 1rem;
+    }
+    tr:nth-child(even) td {
+      background-color: #111;
+    }
+    tr.total-row td {
+      background-color: #333;
+      font-weight: bold;
+    }
+    /* Eliminamos sombras, animaciones, transiciones */
+    /* Ajuste mínimo para pantallas muy anchas de TV */
+    @media (min-width: 1920px) {
+      th, td {
+        padding: 1rem 1.2rem;
+      }
+      body { font-size: 3rem; }
+      th { font-size: 3rem; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Vencimientos Próximos (< 30 días)</h1>
+  <div id="tablaVencimientos">
+    <!-- La tabla se insertará aquí -->
+  </div>
 
+  <script>
+    // URL del CSV de Google Sheets
+    const CSV_URL_BASE =
+      "https://docs.google.com/spreadsheets/d/e/" +
+      "2PACX-1vQNpc-4hMLcvSv4pO4Zirf528ePaScC-l6OGPS5nU_4peDVfs3ur6ih5row8HUs6_BKkoIQhvPvDMiv" +
+      "/pub?gid=208523845&single=true&output=csv";
+
+    // Datos parseados en memoria (se actualiza cada 5 minutos al recargar la página)
+    let datosVálidos = [];
+
+    // 1) Fetch + Parse (solo al cargar o cada 5 min cuando recarga el HTML)
+    function fetchYParsearCSV() {
+      fetch(CSV_URL_BASE)
+        .then(resp => {
+          if (!resp.ok) throw new Error("No se pudo cargar el CSV.");
+          return resp.text();
+        })
+        .then(texto => {
+          const filas = texto.trim().split("\n");
+          const encabezados = filas[0].split(",");
+          datosVálidos = filas.slice(1)
+            .map(linea => {
+              const cols = linea.split(",");
+              const obj = {};
+              encabezados.forEach((key, i) => {
+                obj[key.trim()] = cols[i] ? cols[i].trim() : "";
+              });
+              return obj;
+            })
+            .map(r => {
+              // Convertir TOTAL $ a número
+              r["TOTAL $"] = parseFloat(r["TOTAL $"].replace(/[^0-9.-]+/g, "")) || 0;
+              // Parsear FECHA VENCIMIENTO a Date
+              const raw = r["FECHA VENCIMIENTO"];
+              let d;
+              if (raw.includes("/")) {
+                const p = raw.split("/");
+                d = new Date(
+                  parseInt(p[2], 10),
+                  parseInt(p[1], 10) - 1,
+                  parseInt(p[0], 10)
+                );
+              } else {
+                d = new Date(raw);
+              }
+              r._FECHA = d;
+              return r;
+            })
+            // Filtrar registros válidos
+            .filter(r =>
+              r["BODEGA"] && r["NIVEL"] && r["FAMILIA"] &&
+              !isNaN(r["TOTAL $"]) &&
+              r._FECHA instanceof Date && !isNaN(r._FECHA)
+            );
+
+          // Tras parsear, dibujamos la tabla por primera vez
+          dibujarTablaVencimientos();
+        })
+        .catch(err => {
+          console.error(err);
+          document.getElementById("tablaVencimientos").innerHTML =
+            "<div style='text-align:center; padding:2rem;'>Error cargando datos.</div>";
+        });
+    }
+
+    // 2) Filtrar y renderizar tabla (ejecutado cada 2 min sin volver a fetch)
+    function dibujarTablaVencimientos() {
+      if (!Array.isArray(datosVálidos) || datosVálidos.length === 0) {
+        document.getElementById("tablaVencimientos").innerHTML =
+          "<div style='text-align:center; padding:2rem;'>Sin datos.</div>";
+        return;
+      }
+
+      const hoy = new Date();
+      const celdas = datosVálidos
+        .filter(r => {
+          const diff = (r._FECHA - hoy) / (1000 * 60 * 60 * 24);
+          return diff >= 0 && diff < 30;
+        })
+        .sort((a, b) => a._FECHA - b._FECHA);
+
+      let totalMonto = 0;
+      let html = "<table><thead><tr>" +
+        "<th>UBICACIÓN</th>" +
+        "<th>CÓDIGO VENTA</th>" +
+        "<th>DESCRIPCIÓN</th>" +
+        "<th>FECHA VTO</th>" +
+        "<th>DÍAS</th>" +
+        "<th>UNID</th>" +
+        "<th>BULT</th>" +
+        "<th>MONTO</th>" +
+        "</tr></thead><tbody>";
+
+      if (celdas.length === 0) {
+        html += "<tr><td colspan='8' style='padding:2rem 0;'>No hay productos con vencimiento.</td></tr>";
+      } else {
+        celdas.forEach(r => {
+          const diffDias = Math.floor((r._FECHA - hoy) / (1000 * 60 * 60 * 24));
+          const ubic = `${r["BODEGA"]}-${r["NIVEL"]}-${r["PASILLO"]}-${r["RACK"]}`;
+          const montoEnt = Math.trunc(r["TOTAL $"]);
+          const unidades = r["UNIDADES"] ? parseInt(r["UNIDADES"], 10) : 0;
+          const nivelUp = r["NIVEL"].toUpperCase();
+          const bultos = (nivelUp.includes("PICKEO") || nivelUp.includes("CHICLES"))
+            ? 0
+            : (r["BULTOS"] ? parseInt(r["BULTOS"], 10) : 0);
+          totalMonto += montoEnt;
+
+          const dd = String(r._FECHA.getDate()).padStart(2, "0");
+          const mm = String(r._FECHA.getMonth() + 1).padStart(2, "0");
+          const aa = r._FECHA.getFullYear();
+          const fechaFmt = `${dd}/${mm}/${aa}`;
+
+          html += `<tr>` +
+            `<td>${ubic}</td>` +
+            `<td>${r["CODIGO VENTA"] || ""}</td>` +
+            `<td>${r["DESCRIPCION"] || ""}</td>` +
+            `<td>${fechaFmt}</td>` +
+            `<td>${diffDias}</td>` +
+            `<td>${unidades}</td>` +
+            `<td>${bultos}</td>` +
+            `<td>${montoEnt.toLocaleString("es-CL")}</td>` +
+            `</tr>`;
+        });
+        // Fila de total
+        html += `<tr class="total-row">` +
+          `<td colspan="7"></td>` +
+          `<td>${totalMonto.toLocaleString("es-CL")}</td>` +
+          `</tr>`;
+      }
+
+      html += "</tbody></table>";
+      document.getElementById("tablaVencimientos").innerHTML = html;
+    }
+
+    // 3) Al cargar la página: fetch+parse, luego dibujar cada 2 min
+    window.addEventListener("DOMContentLoaded", () => {
+      fetchYParsearCSV();
+      setInterval(dibujarTablaVencimientos, 120000); // 120 000 ms = 2 min
+      // El fetch completo solo corre al inicio o tras meta-refresh (cada 5 min)
+    });
+  </script>
+</body>
+</html>
