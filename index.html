@@ -39,11 +39,6 @@
       word-break: break-word;
       border-bottom: 1px solid #e0e0e0;
     }
-    th {
-      background-color: #007acc;
-      color: #fff;
-      font-weight: 600;
-    }
     /* Alinear UBICACIÓN (columna 1) y DESCRIPCIÓN (columna 3) a la izquierda */
     td:nth-child(1),
     td:nth-child(3) {
@@ -98,20 +93,34 @@
   </div>
 
   <script>
-    // URL del CSV publicado desde Google Sheets
+    // 1) Intentar adquirir wake lock para pantalla (Screen Wake Lock API)
+    let wakeLock = null;
+    async function solicitarWakeLock() {
+      try {
+        // navigator.wakeLock.request solo está disponible sobre HTTPS en la mayoría de los navegadores
+        wakeLock = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock adquirido');
+        // Si la pestaña pierde visibilidad, vuelve a solicitarlo cuando recupere el foco
+        document.addEventListener('visibilitychange', async () => {
+          if (wakeLock !== null && document.visibilityState === 'visible') {
+            wakeLock = await navigator.wakeLock.request('screen');
+          }
+        });
+      } catch (err) {
+        console.warn('No se pudo adquirir Wake Lock:', err);
+      }
+    }
+
+    // 2) URL del CSV publicado desde Google Sheets
     const CSV_URL_BASE =
       "https://docs.google.com/spreadsheets/d/e/" +
       "2PACX-1vQNpc-4hMLcvSv4pO4Zirf528ePaScC-l6OGPS5nU_4peDVfs3ur6ih5row8HUs6_BKkoIQhvPvDMiv" +
       "/pub?gid=208523845&single=true&output=csv";
 
-    // Almacena los datos parseados para reutilizarlos
     let datosVálidos = [];
 
-    // ===================================================
-    // 1) Función que hace fetch + parseo del CSV (solo al cargar o cada 5 min con meta-refresh)
-    // ===================================================
+    // Función para fetch + parsear CSV
     function fetchYParsearCSV() {
-      // Mostrar spinner mientras carga
       document.getElementById("tablaVencimientos").innerHTML =
         '<div id="spinner">Cargando datos…</div>';
 
@@ -134,9 +143,7 @@
               return obj;
             })
             .map(r => {
-              // Convertir “TOTAL $” a número
               r["TOTAL $"] = parseFloat(r["TOTAL $"].replace(/[^0-9.-]+/g, "")) || 0;
-              // Parsear “FECHA VENCIMIENTO” a Date
               const fechaRaw = r["FECHA VENCIMIENTO"];
               let fechaObj;
               if (fechaRaw.includes("/")) {
@@ -161,7 +168,6 @@
               !isNaN(r._FECHA)
             );
 
-          // Después de parsear, dibujamos la tabla por primera vez
           dibujarTablaVencimientos();
         })
         .catch(err => {
@@ -171,9 +177,7 @@
         });
     }
 
-    // ===================================================
-    // 2) Función para filtrar y dibujar la tabla (llamada cada 2 min sin volver a fetch)
-    // ===================================================
+    // Función para filtrar y dibujar la tabla
     function dibujarTablaVencimientos() {
       if (!Array.isArray(datosVálidos) || datosVálidos.length === 0) {
         document.getElementById("tablaVencimientos").innerHTML =
@@ -255,12 +259,14 @@
       document.getElementById("tablaVencimientos").innerHTML = html;
     }
 
-    // ===================================================
-    // 3) Al cargar la página: fetch+parse inicial y luego redraw cada 2 min
-    // ===================================================
+    // Al cargar la página: 
+    // • intentamos adquirir wake lock 
+    // • hacemos fetch+parse inicial 
+    // • redraw cada 2 min (sin volver a fetch)
     window.addEventListener("DOMContentLoaded", () => {
+      solicitarWakeLock();
       fetchYParsearCSV();
-      setInterval(dibujarTablaVencimientos, 120000); // 120000 ms = 2 minutos
+      setInterval(dibujarTablaVencimientos, 120000);
       // El fetch completo se realizará al inicio y tras el meta-refresh cada 5 min
     });
   </script>
