@@ -126,6 +126,42 @@
       }
     }
 
+    /**
+     * PARSEAR CADA LÍNEA DE CSV respetando comillas dobles
+     * y comas internas.
+     */
+    function parseCSVLine(line) {
+      const result = [];
+      let campo = "";
+      let dentroDeComillas = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+
+        if (char === '"') {
+          // Si estamos dentro de comillas y la siguiente también es comilla, 
+          // interpretamos que es una comilla escapada ("")
+          if (dentroDeComillas && line[i + 1] === '"') {
+            campo += '"';
+            i++;
+          } else {
+            // Alternamos el estado de dentroDeComillas
+            dentroDeComillas = !dentroDeComillas;
+          }
+        } else if (char === "," && !dentroDeComillas) {
+          // Coma que separa campos (solo si NO estamos dentro de comillas)
+          result.push(campo);
+          campo = "";
+        } else {
+          // Cualquier otro carácter (incluidas comas dentro de comillas)
+          campo += char;
+        }
+      }
+      // Agregar el último campo pendiente
+      result.push(campo);
+      return result;
+    }
+
     // 2) URL del CSV publicado desde Google Sheets
     const CSV_URL_BASE =
       "https://docs.google.com/spreadsheets/d/e/" +
@@ -134,7 +170,7 @@
 
     let datosVálidos = [];
 
-    // Función para fetch + parsear CSV
+    // Función para fetch + parsear CSV correctamente
     function fetchYParsearCSV() {
       document.getElementById("tablaVencimientos").innerHTML =
         '<div id="spinner">Cargando datos…</div>';
@@ -145,29 +181,39 @@
           return response.text();
         })
         .then(csvText => {
+          // 1) Partir en filas
           const filas = csvText.trim().split("\n");
-          const encabezados = filas[0].split(",");
 
+          // 2) El encabezado necesita parseCSVLine en lugar de split(",")
+          const encabezados = parseCSVLine(filas[0]).map(h => h.trim());
+
+          // 3) Ahora procesar línea a línea con parseCSVLine
           datosVálidos = filas.slice(1)
             .map(linea => {
-              const valores = linea.split(",");
+              const valores = parseCSVLine(linea);
               const obj = {};
               encabezados.forEach((key, i) => {
-                obj[key.trim()] = valores[i] ? valores[i].trim() : "";
+                obj[key] = valores[i] ? valores[i].trim() : "";
               });
               return obj;
             })
             .map(r => {
+              // Convertir “TOTAL $” a número
               r["TOTAL $"] = parseFloat(r["TOTAL $"].replace(/[^0-9.-]+/g, "")) || 0;
+
+              // Parsear “FECHA VENCIMIENTO” a Date, manejando d/m/yy ó d/m/yyyy
               const fechaRaw = r["FECHA VENCIMIENTO"];
               let fechaObj;
               if (fechaRaw.includes("/")) {
-                const partes = fechaRaw.split("/");
-                fechaObj = new Date(
-                  parseInt(partes[2], 10),
-                  parseInt(partes[1], 10) - 1,
-                  parseInt(partes[0], 10)
-                );
+                const partes = fechaRaw.split("/").map(p => p.trim());
+                let dia = parseInt(partes[0], 10);
+                let mes = parseInt(partes[1], 10) - 1; // JS: 0=enero
+                let anioRaw = partes[2];
+                let anioNum = parseInt(anioRaw, 10);
+                if (anioRaw.length <= 2) {
+                  anioNum += 2000; // ejemplo: "27" → 2027
+                }
+                fechaObj = new Date(anioNum, mes, dia);
               } else {
                 fechaObj = new Date(fechaRaw);
               }
