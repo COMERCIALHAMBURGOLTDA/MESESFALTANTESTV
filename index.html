@@ -6,6 +6,11 @@
   <!-- Recarga completa del HTML cada 300 segundos (5 minutos) -->
   <meta http-equiv="refresh" content="300">
   <style>
+    /* Forzar impresión en horizontal */
+    @page {
+      size: landscape;
+    }
+
     body {
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
       margin: 20px;
@@ -14,9 +19,33 @@
     }
     h1 {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
       font-size: 1.8rem;
       color: #005a9e;
+    }
+    /* Botón de imprimir (visible inmediatamente) */
+    .boton-imprimir {
+      text-align: center;
+      margin: 10px 0 20px 0;
+    }
+    .boton-imprimir button {
+      background-color: #005a9e;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      font-size: 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .boton-imprimir button:hover {
+      background-color: #004070;
+    }
+    /* Ocultar elementos con clase .no-print al imprimir */
+    @media print {
+      .no-print {
+        display: none !important;
+      }
     }
     /* Contenedor que permite scroll horizontal cuando la pantalla sea muy estrecha */
     #tablaVencimientos {
@@ -57,55 +86,31 @@
       background-color: #cccccc;
       font-weight: bold;
     }
-    /* Animaciones para parpadeo (Vencimientos cercanos) */
+    /* Animaciones para parpadeo con colores más fuertes */
     @keyframes parpadeo-rojo {
-      0%   { background-color: rgba(255, 0, 0, 0.2); }
+      0%   { background-color: rgba(255, 0, 0, 0.7); }
       50%  { background-color: transparent; }
-      100% { background-color: rgba(255, 0, 0, 0.2); }
+      100% { background-color: rgba(255, 0, 0, 0.7); }
     }
     .blink-red td {
       animation: parpadeo-rojo 1s infinite;
     }
     @keyframes parpadeo-amarillo {
-      0%   { background-color: rgba(255, 255, 0, 0.3); }
+      0%   { background-color: rgba(255, 255, 0, 0.7); }
       50%  { background-color: transparent; }
-      100% { background-color: rgba(255, 255, 0, 0.3); }
+      100% { background-color: rgba(255, 255, 0, 0.7); }
     }
     .blink-yellow td {
       animation: parpadeo-amarillo 1s infinite;
     }
-    /* Animación para parpadeo morado (Productos vencidos) */
+    /* Animación para parpadeo morado (Productos vencidos) en tono más fuerte */
     @keyframes parpadeo-morado {
-      0%   { background-color: rgba(128, 0, 128, 0.3); }
+      0%   { background-color: rgba(128, 0, 128, 0.7); }
       50%  { background-color: transparent; }
-      100% { background-color: rgba(128, 0, 128, 0.3); }
+      100% { background-color: rgba(128, 0, 128, 0.7); }
     }
     .blink-purple td {
       animation: parpadeo-morado 1s infinite;
-    }
-    /* Botón de imprimir */
-    .boton-imprimir {
-      text-align: center;
-      margin-top: 10px;
-    }
-    .boton-imprimir button {
-      background-color: #005a9e;
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      font-size: 1rem;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-    }
-    .boton-imprimir button:hover {
-      background-color: #004070;
-    }
-    /* Ocultar elementos con clase .no-print al imprimir */
-    @media print {
-      .no-print {
-        display: none !important;
-      }
     }
     /* Ajustes para pantallas muy pequeñas */
     @media (max-width: 600px) {
@@ -122,14 +127,14 @@
 <body>
   <h1>Vencimientos Próximos (menos de 30 días o vencidos)</h1>
 
+  <!-- Botón para imprimir (visible inmediatamente) -->
+  <div class="boton-imprimir no-print">
+    <button onclick="imprimirPDF()">Imprimir PDF</button>
+  </div>
+
   <!-- Contenedor responsivo -->
   <div id="tablaVencimientos">
     <div id="spinner">Cargando datos…</div>
-  </div>
-
-  <!-- Botón para imprimir -->
-  <div class="boton-imprimir no-print">
-    <button onclick="imprimirPDF()">Imprimir PDF</button>
   </div>
 
   <script>
@@ -137,10 +142,8 @@
     let wakeLock = null;
     async function solicitarWakeLock() {
       try {
-        // navigator.wakeLock.request solo está disponible sobre HTTPS en la mayoría de los navegadores
         wakeLock = await navigator.wakeLock.request('screen');
         console.log('Wake Lock adquirido');
-        // Si la pestaña pierde visibilidad, vuelve a solicitarlo cuando recupere el foco
         document.addEventListener('visibilitychange', async () => {
           if (wakeLock !== null && document.visibilityState === 'visible') {
             wakeLock = await navigator.wakeLock.request('screen');
@@ -188,9 +191,7 @@
               return obj;
             })
             .map(r => {
-              // Convertir “TOTAL $” a número
               r["TOTAL $"] = parseFloat(r["TOTAL $"].replace(/[^0-9.-]+/g, "")) || 0;
-              // Parsear “FECHA VENCIMIENTO” a Date
               const fechaRaw = r["FECHA VENCIMIENTO"];
               let fechaObj;
               if (fechaRaw.includes("/")) {
@@ -278,7 +279,6 @@
           const yyyy = d.getFullYear();
           const fechaFmt = `${dd}/${mm}/${yyyy}`;
 
-          // Mostrar “PRODUCTO VENCIDO” si diffDias < 0, y parpadeo morado
           let displayDias;
           let claseFila = "";
 
