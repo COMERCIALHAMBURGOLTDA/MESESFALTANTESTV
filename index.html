@@ -22,6 +22,7 @@
     #tablaVencimientos {
       width: 100%;
       overflow-x: auto;
+      margin-bottom: 20px;
     }
     table {
       border-collapse: collapse;
@@ -82,6 +83,30 @@
     .blink-purple td {
       animation: parpadeo-morado 1s infinite;
     }
+    /* Botón de imprimir */
+    .boton-imprimir {
+      text-align: center;
+      margin-top: 10px;
+    }
+    .boton-imprimir button {
+      background-color: #005a9e;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      font-size: 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .boton-imprimir button:hover {
+      background-color: #004070;
+    }
+    /* Ocultar elementos con clase .no-print al imprimir */
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+    }
     /* Ajustes para pantallas muy pequeñas */
     @media (max-width: 600px) {
       th, td {
@@ -96,9 +121,15 @@
 </head>
 <body>
   <h1>Vencimientos Próximos (menos de 30 días o vencidos)</h1>
+
   <!-- Contenedor responsivo -->
   <div id="tablaVencimientos">
     <div id="spinner">Cargando datos…</div>
+  </div>
+
+  <!-- Botón para imprimir -->
+  <div class="boton-imprimir no-print">
+    <button onclick="imprimirPDF()">Imprimir PDF</button>
   </div>
 
   <script>
@@ -118,6 +149,11 @@
       } catch (err) {
         console.warn('No se pudo adquirir Wake Lock:', err);
       }
+    }
+
+    // Función que dispara la impresión/guardar como PDF
+    function imprimirPDF() {
+      window.print();
     }
 
     // 2) URL del CSV publicado desde Google Sheets
@@ -197,16 +233,11 @@
       }
 
       const hoy = new Date();
-      // ------------------------------------------------------------
-      // CAMBIO: Mostrar también los vencidos (diffDias < 0),
-      //         y continuar mostrando los que vencen en < 30 días.
-      // Si solo quisieras incluir los vencidos en los últimos 30 días,
-      // podrías hacer diffDias >= -30 && diffDias < 30
-      // ------------------------------------------------------------
+      // Mostrar vencidos (diffDias < 0) o próximos 30 días (diffDias ≥ 0 y < 30)
       const itemsProx = datosVálidos
         .filter(r => {
           const diffDias = (r._FECHA - hoy) / (1000 * 60 * 60 * 24);
-          return diffDias < 30; // incluye cualquier diffDias < 30 (negativos o positivos hasta 29)
+          return diffDias < 30;
         })
         .sort((a, b) => a._FECHA - b._FECHA);
 
@@ -247,10 +278,7 @@
           const yyyy = d.getFullYear();
           const fechaFmt = `${dd}/${mm}/${yyyy}`;
 
-          // ------------------------------------------------------------
-          // CAMBIO: Mostrar “PRODUCTO VENCIDO” si diffDias < 0,
-          //         y asignarles una clase de parpadeo morado.
-          // ------------------------------------------------------------
+          // Mostrar “PRODUCTO VENCIDO” si diffDias < 0, y parpadeo morado
           let displayDias;
           let claseFila = "";
 
