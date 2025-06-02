@@ -16,36 +16,13 @@
       margin: 20px;
       background-color: #f5f5f5;
       color: #333;
+      font-weight: bold; /* Todo el texto en negrita */
     }
     h1 {
       text-align: center;
       margin-bottom: 10px;
       font-size: 1.8rem;
       color: #005a9e;
-    }
-    /* Botón de imprimir (visible inmediatamente) */
-    .boton-imprimir {
-      text-align: center;
-      margin: 10px 0 20px 0;
-    }
-    .boton-imprimir button {
-      background-color: #005a9e;
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      font-size: 1rem;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-    }
-    .boton-imprimir button:hover {
-      background-color: #004070;
-    }
-    /* Ocultar elementos con clase .no-print al imprimir */
-    @media print {
-      .no-print {
-        display: none !important;
-      }
     }
     /* Contenedor que permite scroll horizontal cuando la pantalla sea muy estrecha */
     #tablaVencimientos {
@@ -86,14 +63,14 @@
       background-color: #cccccc;
       font-weight: bold;
     }
-    /* Animaciones para parpadeo con colores más fuertes */
+    /* Animaciones para parpadeo con colores más fuertes y duración 2.5s */
     @keyframes parpadeo-rojo {
       0%   { background-color: rgba(255, 0, 0, 0.7); }
       50%  { background-color: transparent; }
       100% { background-color: rgba(255, 0, 0, 0.7); }
     }
     .blink-red td {
-      animation: parpadeo-rojo 1s infinite;
+      animation: parpadeo-rojo 2.5s infinite;
     }
     @keyframes parpadeo-amarillo {
       0%   { background-color: rgba(255, 255, 0, 0.7); }
@@ -101,16 +78,16 @@
       100% { background-color: rgba(255, 255, 0, 0.7); }
     }
     .blink-yellow td {
-      animation: parpadeo-amarillo 1s infinite;
+      animation: parpadeo-amarillo 2.5s infinite;
     }
-    /* Animación para parpadeo morado (Productos vencidos) en tono más fuerte */
+    /* Animación para parpadeo morado (Productos vencidos) en tono más fuerte y duración 2.5s */
     @keyframes parpadeo-morado {
       0%   { background-color: rgba(128, 0, 128, 0.7); }
       50%  { background-color: transparent; }
       100% { background-color: rgba(128, 0, 128, 0.7); }
     }
     .blink-purple td {
-      animation: parpadeo-morado 1s infinite;
+      animation: parpadeo-morado 2.5s infinite;
     }
     /* Ajustes para pantallas muy pequeñas */
     @media (max-width: 600px) {
@@ -126,11 +103,6 @@
 </head>
 <body>
   <h1>Vencimientos Próximos (menos de 30 días o vencidos)</h1>
-
-  <!-- Botón para imprimir (visible inmediatamente) -->
-  <div class="boton-imprimir no-print">
-    <button onclick="imprimirPDF()">Imprimir PDF</button>
-  </div>
 
   <!-- Contenedor responsivo -->
   <div id="tablaVencimientos">
@@ -152,11 +124,6 @@
       } catch (err) {
         console.warn('No se pudo adquirir Wake Lock:', err);
       }
-    }
-
-    // Función que dispara la impresión/guardar como PDF
-    function imprimirPDF() {
-      window.print();
     }
 
     // 2) URL del CSV publicado desde Google Sheets
@@ -296,8 +263,8 @@
 
           html += `<tr class="${claseFila}">
                      <td>${ubic}</td>
-                     <td>${r["CODIGO VENTA"] || ""}</td>
-                     <td>${r["DESCRIPCION"] || ""}</td>
+                     <td>${r["CÓDIGO VENTA"] || ""}</td>
+                     <td>${r["DESCRIPCIÓN"] || ""}</td>
                      <td>${fechaFmt}</td>
                      <td>${displayDias}</td>
                      <td>${unidadesMostrar}</td>
