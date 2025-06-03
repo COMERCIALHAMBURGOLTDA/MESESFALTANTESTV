@@ -219,7 +219,7 @@
     // '90'  → a vencer entre 61 y 90 días (diffDias ≥ 61 && ≤ 90)
     // '91'  → a vencer en más de 90 días (diffDias > 90)
     // 'all' → mostrar todo el stock sin filtrar
-    let currentFilter = 'all';
+    let currentFilter = '30'; // por defecto: < 30 días
 
     // Cambia o quita el filtro: si se hace clic en el mismo filtro activo, vuelve a 'all'
     function toggleFilter(filterValue) {
@@ -390,7 +390,7 @@
 
           html += `<tr class="${claseFila}">
                      <td>${ubic}</td>
-                     <td>${r["CÓDIGO VENTA"] || ""}</td>
+                     <td>${r["CODIGO VENTA"] || ""}</td>
                      <td>${r["DESCRIPCION"] || ""}</td>
                      <td>${fechaFmt}</td>
                      <td>${displayDias}</td>
