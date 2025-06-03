@@ -89,6 +89,30 @@
     .blink-purple td {
       animation: parpadeo-morado 2.5s infinite;
     }
+    /* Estilos básicos para los botones */
+    #filtros {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    #filtros button {
+      margin: 0 5px;
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border: 1px solid #005a9e;
+      border-radius: 4px;
+      background-color: #fff;
+      color: #005a9e;
+      font-weight: bold;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    #filtros button:hover {
+      background-color: #e0f0ff;
+    }
+    #filtros button.active {
+      background-color: #005a9e;
+      color: #fff;
+    }
     /* Ajustes para pantallas muy pequeñas */
     @media (max-width: 600px) {
       th, td {
@@ -98,19 +122,44 @@
       table {
         min-width: unset;
       }
+      #filtros button {
+        margin: 3px 2px;
+        padding: 6px 8px;
+        font-size: 0.8rem;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Vencimientos Próximos (menos de 30 días o vencidos)</h1>
+  <h1>Vencimientos Próximos</h1>
 
-  <!-- Contenedor responsivo -->
+  <!-- Botones de filtro -->
+  <div id="filtros">
+    <button id="btn30" data-filter="30" onclick="toggleFilter('30')">
+      Vencidos o &lt; 30 días
+    </button>
+    <button id="btn60" data-filter="60" onclick="toggleFilter('60')">
+      31–60 días
+    </button>
+    <button id="btn90" data-filter="90" onclick="toggleFilter('90')">
+      61–90 días
+    </button>
+    <button id="btn91" data-filter="91" onclick="toggleFilter('91')">
+      &gt; 90 días
+    </button>
+    <button id="btnAll" data-filter="all" onclick="toggleFilter('all')">
+      TODO STOCK
+    </button>
+  </div>
+
+  <!-- Contenedor donde se inyectará la tabla -->
   <div id="tablaVencimientos">
     <div id="spinner">Cargando datos…</div>
   </div>
 
   <script>
-    // 1) Intentar adquirir wake lock para pantalla (Screen Wake Lock API)
+    // --------------------------------------------------------
+    // 1) Intentar adquirir wake lock para pantalla
     let wakeLock = null;
     async function solicitarWakeLock() {
       try {
@@ -145,19 +194,15 @@
             campo += '"';
             i++;
           } else {
-            // Alternamos el estado de dentroDeComillas
             dentroDeComillas = !dentroDeComillas;
           }
         } else if (char === "," && !dentroDeComillas) {
-          // Coma que separa campos (solo si NO estamos dentro de comillas)
           result.push(campo);
           campo = "";
         } else {
-          // Cualquier otro carácter (incluidas comas dentro de comillas)
           campo += char;
         }
       }
-      // Agregar el último campo pendiente
       result.push(campo);
       return result;
     }
@@ -168,8 +213,42 @@
       "2PACX-1vQNpc-4hMLcvSv4pO4Zirf528ePaScC-l6OGPS5nU_4peDVfs3ur6ih5row8HUs6_BKkoIQhvPvDMiv" +
       "/pub?gid=208523845&single=true&output=csv";
 
+    // Aquí guardaremos todas las filas válidas obtenidas del CSV
     let datosVálidos = [];
 
+    // currentFilter controlará qué renglones se muestran:
+    // '30'  → vencidos o a vencer en menos de 30 días (diffDias < 30)
+    // '60'  → a vencer entre 31 y 60 días (diffDias ≥ 31 && ≤ 60)
+    // '90'  → a vencer entre 61 y 90 días (diffDias ≥ 61 && ≤ 90)
+    // '91'  → a vencer en más de 90 días (diffDias > 90)
+    // 'all' → mostrar todo el stock sin filtrar
+    let currentFilter = 'all';
+
+    // Cambia o quita el filtro: si se hace clic en el mismo filtro activo, vuelve a 'all'
+    function toggleFilter(filterValue) {
+      if (currentFilter === filterValue || filterValue === 'all' && currentFilter === 'all') {
+        currentFilter = 'all';
+      } else {
+        currentFilter = filterValue;
+      }
+      actualizarBotones();
+      dibujarTablaVencimientos();
+    }
+
+    // Actualiza clases "active" en botones según currentFilter
+    function actualizarBotones() {
+      const botones = document.querySelectorAll('#filtros button');
+      botones.forEach(btn => {
+        const valor = btn.getAttribute('data-filter');
+        if (valor === currentFilter) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
+
+    // --------------------------------------------------------
     // Función para fetch + parsear CSV correctamente
     function fetchYParsearCSV() {
       document.getElementById("tablaVencimientos").innerHTML =
@@ -229,6 +308,8 @@
               !isNaN(r._FECHA)
             );
 
+          // Una vez que tenemos todos los datos válidos, marcamos el botón "all" y dibujamos la tabla
+          actualizarBotones();
           dibujarTablaVencimientos();
         })
         .catch(err => {
@@ -238,7 +319,8 @@
         });
     }
 
-    // Función para filtrar y dibujar la tabla
+    // --------------------------------------------------------
+    // Función para filtrar, ordenar y dibujar la tabla según currentFilter
     function dibujarTablaVencimientos() {
       if (!Array.isArray(datosVálidos) || datosVálidos.length === 0) {
         document.getElementById("tablaVencimientos").innerHTML =
@@ -247,11 +329,22 @@
       }
 
       const hoy = new Date();
-      // Mostrar vencidos (diffDias < 0) o próximos 30 días (diffDias ≥ 0 y < 30)
-      const itemsProx = datosVálidos
+      // Filtramos según currentFilter:
+      const itemsFiltrados = datosVálidos
         .filter(r => {
-          const diffDias = (r._FECHA - hoy) / (1000 * 60 * 60 * 24);
-          return diffDias < 30;
+          const diffDias = Math.floor((r._FECHA - hoy) / (1000 * 60 * 60 * 24));
+          if (currentFilter === 'all') {
+            return true;
+          } else if (currentFilter === '30') {
+            return diffDias < 30;
+          } else if (currentFilter === '60') {
+            return diffDias >= 31 && diffDias <= 60;
+          } else if (currentFilter === '90') {
+            return diffDias >= 61 && diffDias <= 90;
+          } else if (currentFilter === '91') {
+            return diffDias > 90;
+          }
+          return false;
         })
         .sort((a, b) => a._FECHA - b._FECHA);
 
@@ -271,10 +364,10 @@
                     </thead>
                     <tbody>`;
 
-      if (itemsProx.length === 0) {
-        html += `<tr><td colspan="8">No hay productos con vencimiento en los próximos 30 días ni vencidos.</td></tr>`;
+      if (itemsFiltrados.length === 0) {
+        html += `<tr><td colspan="8">No hay productos para el filtro seleccionado.</td></tr>`;
       } else {
-        itemsProx.forEach(r => {
+        itemsFiltrados.forEach(r => {
           const d = r._FECHA;
           const diffDias = Math.floor((d - hoy) / (1000 * 60 * 60 * 24));
           const ubic = `${r["BODEGA"]}-${r["NIVEL"]}-${r["PASILLO"]}-${r["RACK"]}`;
@@ -329,15 +422,16 @@
       document.getElementById("tablaVencimientos").innerHTML = html;
     }
 
+    // --------------------------------------------------------
     // Al cargar la página:
-    // • intentamos adquirir wake lock
-    // • hacemos fetch+parse inicial
-    // • redraw cada 2 min (sin volver a fetch)
+    // • Intentamos adquirir wake lock
+    // • Hacemos fetch+parse inicial (pobla datosVálidos)
+    // • Cada 2 min se vuelve a dibujar la tabla (actualizar "días faltantes")
     window.addEventListener("DOMContentLoaded", () => {
       solicitarWakeLock();
       fetchYParsearCSV();
       setInterval(dibujarTablaVencimientos, 120000);
-      // El fetch completo se realizará al inicio y tras el meta-refresh cada 5 min
+      // El fetch completo se realizará al inicio y al recargar la página cada 5 min
     });
   </script>
 </body>
