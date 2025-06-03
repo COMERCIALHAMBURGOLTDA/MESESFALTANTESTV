@@ -33,7 +33,7 @@
     table {
       border-collapse: collapse;
       width: 100%;
-      min-width: 600px; /* Asegura cierta anchura mínima */
+      min-width: 650px; /* Asegura cierta anchura mínima */
       background-color: #fff;
       border-radius: 6px;
       overflow: hidden;
@@ -44,19 +44,28 @@
       text-align: center;
       font-size: 0.95rem;
       word-break: break-word;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid #ccc;
     }
-    /* Alinear UBICACIÓN (columna 1) y DESCRIPCION (columna 3) a la izquierda */
-    td:nth-child(1),
-    td:nth-child(3) {
+    /* Alinear UBICACIÓN (columna 2) y DESCRIPCION (columna 4) a la izquierda */
+    td:nth-child(2),
+    td:nth-child(4) {
       text-align: left;
       padding-left: 12px;
     }
+    /* Estilo para la columna de numeración */
+    th:nth-child(1),
+    td:nth-child(1) {
+      width: 40px;
+    }
+    /* Zebra striping con mayor contraste */
+    tr:nth-child(odd) td {
+      background-color: #ffffff;
+    }
     tr:nth-child(even) td {
-      background-color: #f9f9f9;
+      background-color: #e0e8f0;
     }
     tr:hover td {
-      background-color: #d9edf7;
+      background-color: #b3d4fc;
       cursor: default;
     }
     tr.total-row td {
@@ -211,7 +220,7 @@
       "/pub?gid=208523845&single=true&output=csv";
 
     // Guardaremos todas las filas válidas obtenidas del CSV
-    let datosVálidos = [];
+    let datosValidos = [];
 
     // currentFilter controlará qué renglones se muestran:
     // '30'  → vencidos o a vencer en menos de 30 días (diffDias < 30)
@@ -260,7 +269,7 @@
           const filas = csvText.trim().split("\n");
           const encabezados = parseCSVLine(filas[0]).map(h => h.trim());
 
-          datosVálidos = filas.slice(1)
+          datosValidos = filas.slice(1)
             .map(linea => {
               const valores = parseCSVLine(linea);
               const obj = {};
@@ -311,14 +320,14 @@
     // --------------------------------------------------------
     // Dibujar la tabla filtrada según currentFilter
     function dibujarTablaVencimientos() {
-      if (!Array.isArray(datosVálidos) || datosVálidos.length === 0) {
+      if (!Array.isArray(datosValidos) || datosValidos.length === 0) {
         document.getElementById("tablaVencimientos").innerHTML =
           '<div id="spinner">Sin datos para mostrar.</div>';
         return;
       }
 
       const hoy = new Date();
-      const itemsFiltrados = datosVálidos
+      const itemsFiltrados = datosValidos
         .filter(r => {
           const diffDias = Math.floor((r._FECHA - hoy) / (1000 * 60 * 60 * 24));
           if (currentFilter === 'all') {
@@ -340,6 +349,7 @@
       let html = `<table>
                     <thead>
                       <tr>
+                        <th>#</th>
                         <th>UBICACIÓN</th>
                         <th>CÓDIGO VENTA</th>
                         <th>DESCRIPCION</th>
@@ -353,9 +363,9 @@
                     <tbody>`;
 
       if (itemsFiltrados.length === 0) {
-        html += `<tr><td colspan="8">No hay productos para el filtro seleccionado.</td></tr>`;
+        html += `<tr><td colspan="9">No hay productos para el filtro seleccionado.</td></tr>`;
       } else {
-        itemsFiltrados.forEach(r => {
+        itemsFiltrados.forEach((r, index) => {
           const d = r._FECHA;
           const diffDias = Math.floor((d - hoy) / (1000 * 60 * 60 * 24));
           const ubic = `${r["BODEGA"]}-${r["NIVEL"]}-${r["PASILLO"]}-${r["RACK"]}`;
@@ -389,6 +399,7 @@
           }
 
           html += `<tr class="${claseFila}">
+                     <td>${index + 1}</td>
                      <td>${ubic}</td>
                      <td>${r["CODIGO VENTA"] || ""}</td>
                      <td>${r["DESCRIPCION"] || ""}</td>
@@ -401,7 +412,7 @@
         });
 
         html += `<tr class="total-row">
-                   <td colspan="7"></td>
+                   <td colspan="8"></td>
                    <td><strong>${sumMonto.toLocaleString("es-CL", { minimumFractionDigits: 0 })}</strong></td>
                  </tr>`;
       }
