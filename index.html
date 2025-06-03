@@ -159,12 +159,11 @@
 
   <script>
     // --------------------------------------------------------
-    // 1) Intentar adquirir wake lock para pantalla
+    // Intentar adquirir wake lock para pantalla (Screen Wake Lock API)
     let wakeLock = null;
     async function solicitarWakeLock() {
       try {
         wakeLock = await navigator.wakeLock.request('screen');
-        console.log('Wake Lock adquirido');
         document.addEventListener('visibilitychange', async () => {
           if (wakeLock !== null && document.visibilityState === 'visible') {
             wakeLock = await navigator.wakeLock.request('screen');
@@ -188,8 +187,6 @@
         const char = line[i];
 
         if (char === '"') {
-          // Si estamos dentro de comillas y la siguiente también es comilla, 
-          // interpretamos que es una comilla escapada ("")
           if (dentroDeComillas && line[i + 1] === '"') {
             campo += '"';
             i++;
@@ -207,13 +204,13 @@
       return result;
     }
 
-    // 2) URL del CSV publicado desde Google Sheets
+    // URL del CSV publicado desde Google Sheets
     const CSV_URL_BASE =
       "https://docs.google.com/spreadsheets/d/e/" +
       "2PACX-1vQNpc-4hMLcvSv4pO4Zirf528ePaScC-l6OGPS5nU_4peDVfs3ur6ih5row8HUs6_BKkoIQhvPvDMiv" +
       "/pub?gid=208523845&single=true&output=csv";
 
-    // Aquí guardaremos todas las filas válidas obtenidas del CSV
+    // Guardaremos todas las filas válidas obtenidas del CSV
     let datosVálidos = [];
 
     // currentFilter controlará qué renglones se muestran:
@@ -226,7 +223,7 @@
 
     // Cambia o quita el filtro: si se hace clic en el mismo filtro activo, vuelve a 'all'
     function toggleFilter(filterValue) {
-      if (currentFilter === filterValue || filterValue === 'all' && currentFilter === 'all') {
+      if (currentFilter === filterValue) {
         currentFilter = 'all';
       } else {
         currentFilter = filterValue;
@@ -249,24 +246,20 @@
     }
 
     // --------------------------------------------------------
-    // Función para fetch + parsear CSV correctamente
+    // Fetch + parse del CSV
     function fetchYParsearCSV() {
       document.getElementById("tablaVencimientos").innerHTML =
         '<div id="spinner">Cargando datos…</div>';
 
       fetch(CSV_URL_BASE)
         .then(response => {
-          if (!response.ok) throw new Error("Error al cargar el CSV principal.");
+          if (!response.ok) throw new Error("Error al cargar el CSV.");
           return response.text();
         })
         .then(csvText => {
-          // 1) Partir en filas
           const filas = csvText.trim().split("\n");
-
-          // 2) El encabezado necesita parseCSVLine en lugar de split(",")
           const encabezados = parseCSVLine(filas[0]).map(h => h.trim());
 
-          // 3) Ahora procesar línea a línea con parseCSVLine
           datosVálidos = filas.slice(1)
             .map(linea => {
               const valores = parseCSVLine(linea);
@@ -277,20 +270,17 @@
               return obj;
             })
             .map(r => {
-              // Convertir “TOTAL $” a número
               r["TOTAL $"] = parseFloat(r["TOTAL $"].replace(/[^0-9.-]+/g, "")) || 0;
-
-              // Parsear “FECHA VENCIMIENTO” a Date, manejando d/m/yy ó d/m/yyyy
               const fechaRaw = r["FECHA VENCIMIENTO"];
               let fechaObj;
               if (fechaRaw.includes("/")) {
                 const partes = fechaRaw.split("/").map(p => p.trim());
                 let dia = parseInt(partes[0], 10);
-                let mes = parseInt(partes[1], 10) - 1; // JS: 0=enero
+                let mes = parseInt(partes[1], 10) - 1;
                 let anioRaw = partes[2];
                 let anioNum = parseInt(anioRaw, 10);
                 if (anioRaw.length <= 2) {
-                  anioNum += 2000; // ejemplo: "27" → 2027
+                  anioNum += 2000;
                 }
                 fechaObj = new Date(anioNum, mes, dia);
               } else {
@@ -308,7 +298,6 @@
               !isNaN(r._FECHA)
             );
 
-          // Una vez que tenemos todos los datos válidos, marcamos el botón "all" y dibujamos la tabla
           actualizarBotones();
           dibujarTablaVencimientos();
         })
@@ -320,7 +309,7 @@
     }
 
     // --------------------------------------------------------
-    // Función para filtrar, ordenar y dibujar la tabla según currentFilter
+    // Dibujar la tabla filtrada según currentFilter
     function dibujarTablaVencimientos() {
       if (!Array.isArray(datosVálidos) || datosVálidos.length === 0) {
         document.getElementById("tablaVencimientos").innerHTML =
@@ -329,7 +318,6 @@
       }
 
       const hoy = new Date();
-      // Filtramos según currentFilter:
       const itemsFiltrados = datosVálidos
         .filter(r => {
           const diffDias = Math.floor((r._FECHA - hoy) / (1000 * 60 * 60 * 24));
@@ -393,16 +381,16 @@
             claseFila = "blink-purple";
           } else {
             displayDias = diffDias;
-            if (diffDias <= 4) {
+            if (diffDias >= 1 && diffDias <= 15) {
               claseFila = "blink-red";
-            } else if (diffDias >= 5 && diffDias <= 10) {
+            } else if (diffDias >= 16 && diffDias <= 30) {
               claseFila = "blink-yellow";
             }
           }
 
           html += `<tr class="${claseFila}">
                      <td>${ubic}</td>
-                     <td>${r["CODIGO VENTA"] || ""}</td>
+                     <td>${r["CÓDIGO VENTA"] || ""}</td>
                      <td>${r["DESCRIPCION"] || ""}</td>
                      <td>${fechaFmt}</td>
                      <td>${displayDias}</td>
@@ -424,14 +412,11 @@
 
     // --------------------------------------------------------
     // Al cargar la página:
-    // • Intentamos adquirir wake lock
-    // • Hacemos fetch+parse inicial (pobla datosVálidos)
-    // • Cada 2 min se vuelve a dibujar la tabla (actualizar "días faltantes")
     window.addEventListener("DOMContentLoaded", () => {
       solicitarWakeLock();
       fetchYParsearCSV();
       setInterval(dibujarTablaVencimientos, 120000);
-      // El fetch completo se realizará al inicio y al recargar la página cada 5 min
+      actualizarBotones();
     });
   </script>
 </body>
